@@ -1,0 +1,454 @@
+#!/usr/bin/env node
+/**
+ * kb-web Server v2
+ * 多用户 + 权限 + 日志 + FAQ + 分类重构 + UI 改版
+ *
+ * 基于原有 server.cjs 结构增量重写
+ */
+
+const express = require('express');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+const session = require('express-session');
+const bcrypt = require('bcryptjs');
+const { spawn } = require('child_process');
+
+// ─── 模块导入 ─────────────────────────────────────
+const { getDb, closeDb, initTables, hasUsers, cleanOldLogs } = require('./lib/database.cjs');
+const { isAuthenticated, requireRole, getCurrentUser } = require('./lib/auth.cjs');
+const { log, getLogs } = require('./lib/logger.cjs');
+
+// ─── 配置 ─────────────────────────────────────────
+const PORT = process.env.PORT || 3344;
+const KB_DIR = process.env.KB_DIR || '/home/zhang/company_knowledge_base';
+const DATA_DIR = path.join(__dirname, 'kb_data');
+const MD_CACHE_DIR = path.join(DATA_DIR, 'md_cache');
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+const UPLOAD_DIR = KB_DIR;
+
+// 确保目录存在
+[DATA_DIR, MD_CACHE_DIR, UPLOAD_DIR].forEach(dir => {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+});
+
+// ─── Multer 配置 ──────────────────────────────────
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, UPLOAD_DIR),
+  filename: (req, file, cb) => {
+    // 保留原始文件名，追加时间戳避免冲突
+    const ts = Date.now();
+    const origName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+    cb(null, `${ts}_${origName}`);
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: MAX_FILE_SIZE }
+});
+
+// ─── 自动分类关键词 ───────────────────────────────
+const CATEGORY_KEYWORDS = [
+  { name: '方案', keywords: ['方案', '计划', '设计'] },
+  { name: '报告', keywords: ['报告', '评估报告', '测评报告', '检测报告'] },
+  { name: '标准法规参考', keywords: ['标准', '规范', '法规', '政策', '指导', '指南', 'gb/t', 'gb/t', '国标', '参考'] }
+];
+
+const CATEGORIES = ['方案', '报告', '标准法规参考', '其他'];
+
+function classifyFile(filename) {
+  const lower = filename.toLowerCase();
+  for (const cat of CATEGORY_KEYWORDS) {
+    for (const kw of cat.keywords) {
+      if (lower.includes(kw)) return cat.name;
+    }
+  }
+  return '其他';
+}
+
+// ─── MarkItDown 转换 ──────────────────────────────
+function convertToMd(inputPath) {
+  return new Promise((resolve) => {
+    const pyScript = path.join(__dirname, 'lib', 'convert_markitdown.py');
+    const pyBin = process.env.KB_PYTHON || '/home/zhang/桌面/openclaw-env/bin/python3';
+    const proc = spawn(pyBin, [pyScript, inputPath], { timeout: 30000 });
+    let output = '';
+    let error = '';
+    proc.stdout.on('data', d => output += d.toString());
+    proc.stderr.on('data', d => error += d.toString());
+    proc.on('close', code => {
+      if (code === 0 && output.trim()) {
+        resolve({ success: true, content: output.trim() });
+      } else {
+        resolve({ success: false, error: error || '转换失败' });
+      }
+    });
+    proc.on('error', err => resolve({ success: false, error: err.message }));
+  });
+}
+
+// ─── Express 应用 ─────────────────────────────────
+const app = express();
+
+// 解析 body
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Session
+const SQLiteStore = require('better-sqlite3-session-store')(session);
+app.use(session({
+  store: new SQLiteStore({
+    client: getDb(),
+    expired: {
+      cleanUpIntervalMs: 3600000 // 1h
+    }
+  }),
+  secret: process.env.SESSION_SECRET || 'kb-web-secret-change-in-production',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 天
+    httpOnly: true,
+    sameSite: 'lax'
+  }
+}));
+
+// ─── 静态文件 ─────────────────────────────────────
+// 不自动提供 index.html 首页（由认证中间件控制）
+app.use(express.static(path.join(__dirname, 'public'), { index: false }));
+app.use('/kb_data', isAuthenticated, express.static(DATA_DIR));
+
+// ─── 权限中间件 ──────────────────────────────────
+function adminOnly(req, res, next) {
+  requireRole('admin')(req, res, next);
+}
+
+// ─── 登录页面路由（放在 API 认证之前，以便未登录用户访问） ──
+app.get('/login', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+// ─── 页面路由认证保护 ──────────────────────────
+// 放行登录页和静态资源，其他路径重定向到登录页
+app.use((req, res, next) => {
+  if (req.path === '/login') return next();
+  if (req.path.startsWith('/api/')) return next();
+  if (req.path.match(/\.(css|js|png|jpg|jpeg|ico|svg|woff2?|ttf|eot)$/)) return next();
+  if (req.path === '/' || req.path === '/index.html') {
+    return isAuthenticated(req, res, next);
+  }
+  isAuthenticated(req, res, next);
+});
+
+// 首页路由（已登录用户）
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// ─── API: 认证 ──────────────────────────────────
+app.post('/api/auth/login', (req, res) => {
+  const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ error: '用户名和密码不能为空' });
+  }
+  const db = getDb();
+  const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+  if (!user || !bcrypt.compareSync(password, user.password_hash)) {
+    return res.status(401).json({ error: '用户名或密码错误' });
+  }
+  req.session.userId = user.id;
+  req.session.username = user.username;
+  req.session.role = user.role;
+  log(user.id, 'login', { username: user.username });
+  res.json({ id: user.id, username: user.username, role: user.role });
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  req.session.destroy(() => {
+    res.json({ ok: true });
+  });
+});
+
+app.get('/api/auth/me', (req, res) => {
+  const user = getCurrentUser(req);
+  if (!user) return res.json({ user: null });
+  res.json({ user });
+});
+
+// ─── API: 用户管理 (仅 admin) ──────────────────
+app.get('/api/admin/users', adminOnly, (req, res) => {
+  const db = getDb();
+  const users = db.prepare('SELECT id, username, role, created_at FROM users ORDER BY created_at').all();
+  res.json(users);
+});
+
+app.post('/api/admin/users', adminOnly, (req, res) => {
+  const { username, password, role } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ error: '用户名和密码不能为空' });
+  }
+  if (password.length < 6) {
+    return res.status(400).json({ error: '密码至少 6 位' });
+  }
+  const validRoles = ['admin', 'engineer'];
+  const finalRole = validRoles.includes(role) ? role : 'engineer';
+
+  const db = getDb();
+  try {
+    const hash = bcrypt.hashSync(password, 10);
+    const result = db.prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)').run(username, hash, finalRole);
+    log(req.session.userId, 'add_user', { username, role: finalRole });
+    res.json({ id: result.lastInsertRowid, username, role: finalRole });
+  } catch (e) {
+    if (e.message.includes('UNIQUE')) {
+      return res.status(409).json({ error: '用户名已存在' });
+    }
+    throw e;
+  }
+});
+
+app.delete('/api/admin/users/:id', adminOnly, (req, res) => {
+  const targetId = parseInt(req.params.id);
+  if (targetId === req.session.userId) {
+    return res.status(400).json({ error: '不能删除自己' });
+  }
+  const db = getDb();
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(targetId);
+  if (!user) return res.status(404).json({ error: '用户不存在' });
+  db.prepare('DELETE FROM users WHERE id = ?').run(targetId);
+  log(req.session.userId, 'delete_user', { username: user.username, role: user.role });
+  res.json({ ok: true });
+});
+
+// ─── API: 操作日志 (仅 admin) ──────────────────
+app.get('/api/admin/logs', adminOnly, (req, res) => {
+  const days = parseInt(req.query.days) || 30;
+  const limit = Math.min(parseInt(req.query.limit) || 100, 500);
+  const offset = parseInt(req.query.offset) || 0;
+  const logs = getLogs(days, limit, offset);
+  // 获取总数
+  const db = getDb();
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const total = db.prepare('SELECT COUNT(*) as cnt FROM logs WHERE created_at >= ?').get(since).cnt;
+  res.json({ logs, total, days, limit, offset });
+});
+
+// ─── API: 文件列表 ─────────────────────────────
+app.get('/api/files', isAuthenticated, (req, res) => {
+  const db = getDb();
+  const category = req.query.category;
+  let rows;
+  if (category && CATEGORIES.includes(category)) {
+    rows = db.prepare('SELECT id, original_name, category, file_size, mime_type, created_at FROM files WHERE category = ? ORDER BY created_at DESC').all(category);
+  } else {
+    rows = db.prepare('SELECT id, original_name, category, file_size, mime_type, created_at FROM files ORDER BY created_at DESC').all();
+  }
+  res.json(rows);
+});
+
+// ─── API: 上传 (仅 admin) ──────────────────────
+app.post('/api/upload', adminOnly, upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: '未选择文件' });
+
+  const file = req.file;
+  const origName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+  const category = classifyFile(origName);
+
+  // 转换 md
+  let mdPath = null;
+  const convertResult = await convertToMd(file.path);
+  if (convertResult.success) {
+    mdPath = path.join(MD_CACHE_DIR, `${path.basename(file.filename)}.md`);
+    fs.writeFileSync(mdPath, convertResult.content);
+  }
+
+  // 存入 DB
+  const db = getDb();
+  const result = db.prepare(
+    'INSERT INTO files (original_name, storage_path, md_path, category, file_size, mime_type, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).run(
+    origName,
+    file.path,
+    mdPath,
+    category,
+    file.size,
+    file.mimetype,
+    req.session.userId
+  );
+
+  log(req.session.userId, 'upload', { filename: origName, category, size: file.size });
+  res.json({
+    id: result.lastInsertRowid,
+    original_name: origName,
+    category,
+    md_ok: convertResult.success
+  });
+});
+
+// ─── API: 删除 (仅 admin) ──────────────────────
+app.delete('/api/files/:id', adminOnly, (req, res) => {
+  const db = getDb();
+  const file = db.prepare('SELECT * FROM files WHERE id = ?').get(req.params.id);
+  if (!file) return res.status(404).json({ error: '文件不存在' });
+
+  // 删除物理文件
+  try { if (fs.existsSync(file.storage_path)) fs.unlinkSync(file.storage_path); } catch {}
+  try { if (file.md_path && fs.existsSync(file.md_path)) fs.unlinkSync(file.md_path); } catch {}
+
+  db.prepare('DELETE FROM files WHERE id = ?').run(file.id);
+  log(req.session.userId, 'delete', { filename: file.original_name, category: file.category });
+  res.json({ ok: true });
+});
+
+// ─── API: 搜索 ─────────────────────────────────
+app.get('/api/search', isAuthenticated, (req, res) => {
+  const q = (req.query.q || '').trim();
+  const category = req.query.category || '';
+  if (!q) return res.json([]);
+
+  const db = getDb();
+  let rows;
+
+  if (category && CATEGORIES.includes(category)) {
+    rows = db.prepare('SELECT id, original_name, category, md_path, created_at FROM files WHERE category = ? ORDER BY created_at DESC').all(category);
+  } else {
+    rows = db.prepare('SELECT id, original_name, category, md_path, created_at FROM files ORDER BY created_at DESC').all();
+  }
+
+  const results = [];
+  for (const file of rows) {
+    if (file.md_path && fs.existsSync(file.md_path)) {
+      const stats = fs.statSync(file.md_path);
+      if (stats.size > 5 * 1024 * 1024) continue; // 跳过 >5MB
+      const content = fs.readFileSync(file.md_path, 'utf8');
+      if (content.toLowerCase().includes(q.toLowerCase())) {
+        // 提取上下文片段
+        const idx = content.toLowerCase().indexOf(q.toLowerCase());
+        const start = Math.max(0, idx - 60);
+        const end = Math.min(content.length, idx + q.length + 60);
+        const snippet = content.slice(start, end).replace(/\n+/g, ' ');
+        results.push({
+          id: file.id,
+          original_name: file.original_name,
+          category: file.category,
+          snippet: snippet.length > 200 ? snippet.slice(0, 200) + '...' : snippet,
+          created_at: file.created_at
+        });
+      }
+    }
+  }
+
+  res.json(results.slice(0, 50));
+});
+
+// ─── API: FAQ ─────────────────────────────────
+app.get('/api/faq', isAuthenticated, (req, res) => {
+  const db = getDb();
+  const q = (req.query.q || '').trim();
+  let rows;
+  if (q) {
+    rows = db.prepare('SELECT id, question, answer, category, created_at, updated_at FROM faq WHERE question LIKE ? OR answer LIKE ? ORDER BY created_at DESC').all(`%${q}%`, `%${q}%`);
+  } else {
+    rows = db.prepare('SELECT id, question, answer, category, created_at, updated_at FROM faq ORDER BY created_at DESC').all();
+  }
+  res.json(rows);
+});
+
+app.post('/api/faq', adminOnly, (req, res) => {
+  const { question, answer, category } = req.body;
+  if (!question || !answer) return res.status(400).json({ error: '问题和答案不能为空' });
+  const db = getDb();
+  const result = db.prepare('INSERT INTO faq (question, answer, category, created_by) VALUES (?, ?, ?, ?)').run(question, answer, category || '', req.session.userId);
+  res.json({ id: result.lastInsertRowid, question, answer, category: category || '' });
+});
+
+app.put('/api/faq/:id', adminOnly, (req, res) => {
+  const { question, answer, category } = req.body;
+  if (!question || !answer) return res.status(400).json({ error: '问题和答案不能为空' });
+  const db = getDb();
+  db.prepare('UPDATE faq SET question = ?, answer = ?, category = ?, updated_at = datetime(\'now\') WHERE id = ?').run(question, answer, category || '', req.params.id);
+  res.json({ ok: true });
+});
+
+app.delete('/api/faq/:id', adminOnly, (req, res) => {
+  const db = getDb();
+  db.prepare('DELETE FROM faq WHERE id = ?').run(req.params.id);
+  res.json({ ok: true });
+});
+
+// ─── 前端页面路由 ─────────────────────────────
+const SPA_HTML = (() => {
+  const htmlPath = path.join(__dirname, 'public', 'index.html');
+  if (fs.existsSync(htmlPath)) {
+    return fs.readFileSync(htmlPath, 'utf8');
+  }
+  return '<html><body>页面未找到</body></html>';
+})();
+
+// 所有非 API 的 GET 请求返回 SPA
+app.get('*', (req, res) => {
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: '接口不存在' });
+  }
+  res.send(SPA_HTML);
+});
+
+// ─── 启动 ─────────────────────────────────────
+async function main() {
+  // 端口预检测：防止进程冲突导致数据库连接被关闭
+  const net = require('net');
+  await new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.once('error', err => {
+      if (err.code === 'EADDRINUSE') {
+        console.error(`[kb-web] 端口 ${PORT} 已被占用，退出避免损坏数据库`);
+        process.exit(1);
+      }
+      reject(err);
+    });
+    server.once('listening', () => {
+      server.close();
+      resolve();
+    });
+    server.listen(PORT, '0.0.0.0');
+  });
+
+  // 初始化数据库
+  initTables();
+
+  // 检查是否有用户
+  if (!hasUsers()) {
+    console.log('\n=== 首次启动: 创建管理员账号 ===');
+    // 从环境变量或提示输入
+    const bcrypt2 = require('bcryptjs');
+    const envUser = process.env.KB_ADMIN_USER;
+    const envPass = process.env.KB_ADMIN_PASS;
+    if (envUser && envPass && envPass.length >= 6) {
+      const hash = bcrypt2.hashSync(envPass, 10);
+      const db = getDb();
+      db.prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)').run(envUser, hash, 'admin');
+      console.log(`  管理员 "${envUser}" 已创建 (环境变量)`);
+    } else {
+      console.log('  设置环境变量 KB_ADMIN_USER / KB_ADMIN_PASS 自动创建管理员账号');
+      console.log('  或访问系统后通过注册页面创建（如果支持注册）');
+    }
+  }
+
+  // 清理过期日志
+  cleanOldLogs();
+  const db = getDb();
+
+  // 启动服务器
+  app.listen(PORT, () => {
+    console.log(`[kb-web] 服务启动于 http://localhost:${PORT}`);
+    console.log(`[kb-web] 知识库路径: ${UPLOAD_DIR}`);
+  });
+}
+
+main().catch(err => {
+  console.error('[kb-web] 启动失败:', err);
+  process.exit(1);
+});
+
+module.exports = app;

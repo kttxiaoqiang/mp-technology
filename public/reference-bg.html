@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>登录页专属 · 高级感AI视觉特效</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+            background: #0a0c15;
+            overflow-x: hidden;
+        }
+
+        /* 导航切换栏 — 方便预览不同风格 */
+        .demo-nav {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 200;
+            display: flex;
+            gap: 12px;
+            background: rgba(10, 15, 25, 0.7);
+            backdrop-filter: blur(12px);
+            padding: 8px 20px;
+            border-radius: 60px;
+            border: 1px solid rgba(80, 140, 255, 0.3);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+        }
+
+        .demo-btn {
+            background: transparent;
+            border: none;
+            color: #ccdeff;
+            font-size: 0.85rem;
+            font-weight: 500;
+            padding: 6px 18px;
+            border-radius: 40px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            letter-spacing: 0.2px;
+        }
+
+        .demo-btn.active {
+            background: #2c5cb0;
+            color: white;
+            box-shadow: 0 0 8px rgba(60, 120, 255, 0.5);
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+
+        .demo-btn:hover:not(.active) {
+            background: rgba(60, 110, 200, 0.5);
+            color: white;
+        }
+
+        /* 登录卡片容器 — 模拟真实登录页布局 */
+        .login-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        /* 背景特效层 */
+        .bg-effect {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* 登录卡片 — 磨砂玻璃质感，高级感 */
+        .login-card {
+            position: relative;
+            z-index: 10;
+            background: rgba(15, 20, 35, 0.65);
+            backdrop-filter: blur(16px);
+            border-radius: 2rem;
+            padding: 2.5rem 2rem;
+            width: 90%;
+            max-width: 420px;
+            border: 1px solid rgba(100, 150, 255, 0.35);
+            box-shadow: 0 25px 45px rgba(0, 0, 0, 0.3), 0 0 0 0.5px rgba(120, 170, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .login-card:hover {
+            border-color: rgba(80, 160, 255, 0.6);
+            box-shadow: 0 30px 50px rgba(0, 0, 0, 0.4), 0 0 18px rgba(0, 150, 255, 0.2);
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 1.8rem;
+        }
+
+        .logo h1 {
+            font-size: 2rem;
+            font-weight: 600;
+            background: linear-gradient(135deg, #FFFFFF, #8bb9ff);
+            background-clip: text;
+            -webkit-background-clip: text;
+            color: transparent;
+            letter-spacing: -0.5px;
+        }
+
+        .logo p {
+            font-size: 0.8rem;
+            color: #9bb5e0;
+            margin-top: 6px;
+        }
+
+        .input-group {
+            margin-bottom: 1.2rem;
+        }
+
+        .input-group input {
+            width: 100%;
+            background: rgba(20, 28, 45, 0.7);
+            border: 1px solid rgba(100, 140, 210, 0.5);
+            border-radius: 1rem;
+            padding: 0.9rem 1.2rem;
+            font-size: 0.95rem;
+            color: #eef5ff;
+            transition: all 0.2s;
+            outline: none;
+            font-weight: 400;
+        }
+
+        .input-group input:focus {
+            border-color: #4c9aff;
+            box-shadow: 0 0 12px rgba(76, 154, 255, 0.3);
+            background: rgba(25, 35, 55, 0.8);
+        }
+
+        .input-group input::placeholder {
+            color: #7f8fb0;
+            font-weight: 300;
+        }
+
+        .login-btn {
+            width: 100%;
+            background: linear-gradient(95deg, #2c5cb0, #1e3e7c);
+            border: none;
+            border-radius: 1rem;
+            padding: 0.9rem;
+            font-size: 1rem;
+            font-weight: 600;
+            color: white;
+            cursor: pointer;
+            transition: all 0.25s;
+            margin-top: 1rem;
+            letter-spacing: 0.5px;
+            box-shadow: 0 5px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .login-btn:hover {
+            background: linear-gradient(95deg, #3e6fc9, #2a4a8a);
+            transform: translateY(-2px);
+            box-shadow: 0 12px 20px rgba(0, 80, 200, 0.25);
+        }
+
+        .extra-links {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 1.5rem;
+            font-size: 0.75rem;
+            color: #9ab0dd;
+        }
+
+        .extra-links span {
+            cursor: default;
+            opacity: 0.7;
+        }
+
+        .extra-links a {
+            color: #bdd4ff;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .extra-links a:hover {
+            color: white;
+        }
+
+        /* 右下角提示 */
+        .credit {
+            position: fixed;
+            bottom: 16px;
+            right: 20px;
+            z-index: 20;
+            font-size: 0.7rem;
+            color: #6b7ca0;
+            background: rgba(0,0,0,0.3);
+            padding: 4px 12px;
+            border-radius: 30px;
+            backdrop-filter: blur(4px);
+            pointer-events: none;
+            font-family: monospace;
+        }
+
+        @media (max-width: 500px) {
+            .login-card { padding: 1.8rem 1.5rem; margin: 0 16px; }
+            .demo-btn { padding: 4px 12px; font-size: 0.7rem; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="demo-nav">
+    <button class="demo-btn active" data-effect="0">✨ 流光渐变 · 极简轻量</button>
+    <button class="demo-btn" data-effect="1">🌌 智能粒子网 · 科技感</button>
+    <button class="demo-btn" data-effect="2">💎 微光几何线 · 高级感</button>
+</div>
+
+<div class="login-container">
+    <!-- 特效动态画布会插入到这里 -->
+    <div id="effect-canvas" class="bg-effect"></div>
+    
+    <div class="login-card">
+        <div class="logo">
+            <h1>NEXUS<span style="font-weight:300">AI</span></h1>
+            <p>智能感知 · 安全登录</p>
+        </div>
+        <div class="input-group">
+            <input type="text" placeholder="邮箱 / 手机号" value="demo@aiflow.com">
+        </div>
+        <div class="input-group">
+            <input type="password" placeholder="密码" value="12345678">
+        </div>
+        <button class="login-btn">登 录 系 统</button>
+        <div class="extra-links">
+            <span>🔐 企业级安全</span>
+            <a href="#">忘记密码?</a>
+        </div>
+    </div>
+</div>
+<div class="credit">⚡ AI 视觉增强 | 适用登录页 · 轻量流畅</div>
+
+<script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.128.0/build/three.module.js"
+        }
+    }
+</script>
+
+<script type="module">
+    import * as THREE from 'three';
+
+    // ---------- 全局变量 ----------
+    let currentEffect = 0;          // 0:渐变流光,1:粒子网络,2:几何线条
+    let activeRender = null;        // 用于清理动画
+    let container = document.getElementById('effect-canvas');
+    
+    // 工具: 清空当前特效 & 停止动画
+    function clearEffect() {
+        if (activeRender && typeof activeRender.stop === 'function') {
+            activeRender.stop();
+        }
+        if (container) {
+            while(container.firstChild) container.removeChild(container.firstChild);
+        }
+    }
+    
+    // ========== 特效0: 流光渐变 (纯 CSS + Canvas 2D 轻量光晕移动，极其流畅) ==========
+    function initGradientFlow() {
+        const canvas = document.createElement('canvas');
+        canvas.style.width = '100%';
+        canvas.style.height = '100%';
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        container.appendChild(canvas);
+        const ctx = canvas.getContext('2d');
+        
+        let time = 0;
+        let animationId = null;
+        
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        
+        function draw() {
+            if (!ctx) return;
+            const w = canvas.width, h = canvas.height;
+            const grad = ctx.createLinearGradient(
+                w * (0.5 + Math.sin(time * 0.2) * 0.15), 
+                h * (0.3 + Math.cos(time * 0.23) * 0.1),
+                w * (0.5 + Math.cos(time * 0.17) * 0.2), 
+                h * (0.7 + Math.sin(time * 0.19) * 0.15)
+            );
+            grad.addColorStop(0, '#0b1120');
+            grad.addColorStop(0.4, '#14213d');
+            grad.addColorStop(0.7, '#1d3557');
+            grad.addColorStop(1, '#0f172a');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, w, h);
+            
+            // 添加流动光晕特效 (模拟光线)
+            for (let i = 0; i < 3; i++) {
+                const offset = (time * 0.5 + i * 2) % (w + h);
+                const alpha = 0.05 + Math.sin(time * 0.9 + i) * 0.02;
+                ctx.beginPath();
+                ctx.moveTo(offset * 0.7, 0);
+                ctx.lineTo(offset * 0.7 + 120, h);
+                ctx.lineTo(offset * 0.7 - 40, h);
+                ctx.fillStyle = `rgba(80, 160, 255, ${alpha})`;
+                ctx.fill();
+            }
+            
+            // 增加星尘
+            for (let s = 0; s < 180; s++) {
+                if (s % 2 === 0) continue;
+                const x = (s * 131) % w;
+                const y = (s * 253 + time * 12) % h;
+                ctx.beginPath();
+                ctx.arc(x, y, 1.2, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(140, 200, 255, ${0.3 + Math.sin(s + time)*0.15})`;
+                ctx.fill();
+            }
+            
+            animationId = requestAnimationFrame(draw);
+        }
+        
+        draw();
+        
+        const stop = () => {
+            if (animationId) cancelAnimationFrame(animationId);
+            window.removeEventListener('resize', resize);
+        };
+        return { stop };
+    }
+    
+    // ========== 特效1: 智能粒子网 (Three.js优化粒子 + 动态连线，低负载) ==========
+    function initParticleNetwork() {
+        const containerDiv = document.getElementById('effect-canvas');
+        const width = containerDiv.clientWidth;
+        const height = containerDiv.clientHeight;
+        
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x050a14);
+        scene.fog = new THREE.FogExp2(0x050a14, 0.008);
+        
+        const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+        camera.position.set(0, 1.5, 9);
+        camera.lookAt(0, 0, 0);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+        renderer.setSize(width, height);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.8));
+        containerDiv.innerHTML = '';
+        containerDiv.appendChild(renderer.domElement);
+        
+        // 粒子系统 (减少数量保证登录页流畅)
+        const particleCount = 1100;
+        const geometry = new THREE.BufferGeometry();
+        const positions = new Float32Array(particleCount * 3);
+        for (let i = 0; i < particleCount; i++) {
+            const radius = 2.4 + Math.random() * 1.6;
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos(2 * Math.random() - 1);
+            positions[i*3] = radius * Math.sin(phi) * Math.cos(theta);
+            positions[i*3+1] = radius * Math.sin(phi) * Math.sin(theta) * 0.7;
+            positions[i*3+2] = radius * Math.cos(phi);
+        }
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        
+        const particleMat = new THREE.PointsMaterial({
+            color: 0x6a9eff,
+            size: 0.09,
+            transparent: true,
+            blending: THREE.AdditiveBlending,
+            opacity: 0.75
+        });
+        const particles = new THREE.Points(geometry, particleMat);
+        scene.add(particles);
+        
+        // 连线系统 (根据距离连接，轻量化，每帧更新)
+        let lineSegments = null;
+        function updateLines() {
+            const posAttr = geometry.attributes.position.array;
+            const pairs = [];
+            const threshold = 1.85;
+            // 空间分桶简单优化
+            for (let i = 0; i < particleCount; i++) {
+                for (let j = i + 1; j < particleCount; j += 37) {  // 随机采样保证性能且有网状感
+                    const ix = i*3, jx = j*3;
+                    const dx = posAttr[ix] - posAttr[jx];
+                    const dy = posAttr[ix+1] - posAttr[jx+1];
+                    const dz = posAttr[ix+2] - posAttr[jx+2];
+                    const dist = Math.hypot(dx, dy, dz);
+                    if (dist < threshold && dist > 0.3) {
+                        pairs.push([i, j]);
+                    }
+                }
+            }
+            const vertices = [];
+            for (let [a,b] of pairs) {
+                const ia = a*3, ib = b*3;
+                vertices.push(posAttr[ia], posAttr[ia+1], posAttr[ia+2]);
+                vertices.push(posAttr[ib], posAttr[ib+1], posAttr[ib+2]);
+            }
+            if (lineSegments) scene.remove(lineSegments);
+            if (vertices.length) {
+                const lineGeo = new THREE.BufferGeometry();
+                lineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(vertices), 3));
+                const lineMat = new THREE.LineBasicMaterial({ color: 0x3a7eff, transparent: true, opacity: 0.28 });
+                lineSegments = new THREE.LineSegments(lineGeo, lineMat);
+                scene.add(lineSegments);
+            }
+        }
+        
+        let time = 0;
+        let animId;
+        function animate() {
+            animId = requestAnimationFrame(animate);
+            time += 0.012;
+            // 粒子缓慢飘移
+            const posAttr = geometry.attributes.position.array;
+            for (let i = 0; i < particleCount; i++) {
+                const ix = i*3;
+                const origX = positions[ix];
+                const origY = positions[ix+1];
+                const origZ = positions[ix+2];
+                posAttr[ix] = origX + Math.sin(time * 0.5 + origY) * 0.002;
+                posAttr[ix+1] = origY + Math.cos(time * 0.43 + origZ) * 0.002;
+                posAttr[ix+2] = origZ + Math.sin(time * 0.37 + origX) * 0.002;
+            }
+            geometry.attributes.position.needsUpdate = true;
+            updateLines();
+            
+            particles.rotation.y = time * 0.08;
+            particles.rotation.x = Math.sin(time * 0.2) * 0.1;
+            renderer.render(scene, camera);
+        }
+        animate();
+        
+        const handleResize = () => {
+            const w = containerDiv.clientWidth, h = containerDiv.clientHeight;
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+        };
+        window.addEventListener('resize', handleResize);
+        
+        const stop = () => {
+            if (animId) cancelAnimationFrame(animId);
+            window.removeEventListener('resize', handleResize);
+            renderer.dispose();
+        };
+        return { stop };
+    }
+    
+    // ========== 特效2: 微光几何线条 (优雅旋转线框+光晕，极简科技风) ==========
+    function initGeometricLines() {
+        const containerDiv = document.getElementById('effect-canvas');
+        const width = containerDiv.clientWidth;
+        const height = containerDiv.clientHeight;
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x03050b);
+        
+        const camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 1000);
+        camera.position.set(2, 1.2, 6);
+        camera.lookAt(0, 0, 0);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(width, height);
+        renderer.setClearColor(0x03050b, 1);
+        containerDiv.innerHTML = '';
+        containerDiv.appendChild(renderer.domElement);
+        
+        const group = new THREE.Group();
+        // 创建多个细环和线条组合
+        const torusKnotGeo = new THREE.TorusKnotGeometry(1.2, 0.045, 180, 24, 3, 4);
+        const knotMat = new THREE.MeshStandardMaterial({ color: 0x3e8eff, emissive: 0x1a66bb, emissiveIntensity: 0.6, wireframe: false, transparent: true, opacity: 0.4 });
+        const knot = new THREE.Mesh(torusKnotGeo, knotMat);
+        group.add(knot);
+        
+        const wireframeBox = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1.9, 1.9, 1.9)), new THREE.LineBasicMaterial({ color: 0x5f9eff }));
+        wireframeBox.position.set(0, 0, 0);
+        group.add(wireframeBox);
+        
+        const ringGeo = new THREE.TorusGeometry(1.6, 0.03, 128, 200);
+        const ringMat = new THREE.MeshStandardMaterial({ color: 0x88b4ff, emissive: 0x2277cc });
+        const ring = new THREE.Mesh(ringGeo, ringMat);
+        group.add(ring);
+        
+        const smallRingGeo = new THREE.TorusGeometry(0.9, 0.02, 96, 160);
+        const smallRing = new THREE.Mesh(smallRingGeo, ringMat);
+        group.add(smallRing);
+        
+        scene.add(group);
+        
+        // 光晕粒子点
+        const starCount = 500;
+        const starGeo = new THREE.BufferGeometry();
+        const starPos = [];
+        for (let i = 0; i < starCount; i++) {
+            starPos.push((Math.random() - 0.5) * 25);
+            starPos.push((Math.random() - 0.5) * 15);
+            starPos.push((Math.random() - 0.5) * 15 - 5);
+        }
+        starGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(starPos), 3));
+        const starMat = new THREE.PointsMaterial({ color: 0x8ab3ff, size: 0.05, transparent: true, blending: THREE.AdditiveBlending });
+        const starsField = new THREE.Points(starGeo, starMat);
+        scene.add(starsField);
+        
+        const ambient = new THREE.AmbientLight(0x111122);
+        const light = new THREE.PointLight(0x5588ff, 0.5);
+        light.position.set(2, 3, 2);
+        scene.add(ambient);
+        scene.add(light);
+        
+        let time = 0;
+        let animId;
+        function animate() {
+            animId = requestAnimationFrame(animate);
+            time += 0.01;
+            group.rotation.x = Math.sin(time * 0.2) * 0.2;
+            group.rotation.y = time * 0.3;
+            group.rotation.z = Math.cos(time * 0.18) * 0.15;
+            ring.rotation.z = time * 0.5;
+            smallRing.rotation.x = time * 0.6;
+            starsField.rotation.y += 0.0005;
+            renderer.render(scene, camera);
+        }
+        animate();
+        
+        const handleResize = () => {
+            const w = containerDiv.clientWidth, h = containerDiv.clientHeight;
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+        };
+        window.addEventListener('resize', handleResize);
+        const stop = () => {
+            if (animId) cancelAnimationFrame(animId);
+            window.removeEventListener('resize', handleResize);
+            renderer.dispose();
+        };
+        return { stop };
+    }
+    
+    // 根据索引切换特效
+    function switchEffect(index) {
+        clearEffect();
+        currentEffect = index;
+        if (index === 0) {
+            activeRender = initGradientFlow();
+        } else if (index === 1) {
+            activeRender = initParticleNetwork();
+        } else if (index === 2) {
+            activeRender = initGeometricLines();
+        }
+        // 更新按钮active样式
+        document.querySelectorAll('.demo-btn').forEach((btn, i) => {
+            if (i == index) btn.classList.add('active');
+            else btn.classList.remove('active');
+        });
+    }
+    
+    // 绑定导航事件
+    document.querySelectorAll('.demo-btn').forEach((btn, idx) => {
+        btn.addEventListener('click', () => {
+            switchEffect(idx);
+        });
+    });
+    
+    // 启动默认特效 (流光渐变，最轻量)
+    switchEffect(0);
+    
+    // 登录卡片展示不受影响，同时窗口resize时部分特效内部自适应
+    window.addEventListener('resize', () => {
+        // 部分特效已自带resize，无需额外处理
+    });
+</script>
+</body>
+</html>

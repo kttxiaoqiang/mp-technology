@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>密码应用知识库</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans SC', sans-serif; }
+    .snippet { color: #555; font-size: 0.875rem; line-height: 1.4; }
+    mark { background: #fef08a; padding: 0 2px; }
+    .tab-active { border-bottom-color: #1a73e8 !important; color: #1a73e8 !important; }
+    .faq-question { cursor: pointer; user-select: none; }
+    .faq-question:hover { background: #f0f4ff; }
+    .faq-answer { display: none; }
+    .faq-answer.open { display: block; }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 50; }
+    .modal-content { background: white; border-radius: 8px; padding: 24px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto; }
+    .file-icon { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; color: white; flex-shrink: 0; }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+<div id="app">
+  <!-- 加载中 -->
+  <div class="flex items-center justify-center h-screen text-gray-400 text-lg">
+    <span>加载中...</span>
+  </div>
+</div>
+
+<script>
+// ─── SPA Router ─────────────────────────────────
+const App = {
+  user: null,
+
+  async init() {
+    await this.checkAuth();
+    this.render();
+    window.addEventListener('hashchange', () => this.render());
+  },
+
+  async checkAuth() {
+    try {
+      const res = await fetch('/api/auth/me');
+      const data = await res.json();
+      this.user = data.user;
+    } catch {
+      this.user = null;
+    }
+  },
+
+  getHash() {
+    return window.location.hash.slice(1) || '/';
+  },
+
+  navigate(hash) {
+    window.location.hash = hash;
+  },
+
+  render() {
+    const hash = this.getHash();
+    const app = document.getElementById('app');
+
+    if (!this.user) {
+      if (hash === '/login') {
+        this.renderLogin(app);
+      } else {
+        this.renderLogin(app);
+      }
+      return;
+    }
+
+    this.renderLayout(app, hash);
+  },
+
+  // ─── Login ──────────────────────────────────────
+  renderLogin(container) {
+    container.innerHTML = `
+      <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-500 to-blue-800">
+        <div class="bg-white rounded-xl shadow-2xl p-8 w-full max-w-sm">
+          <h1 class="text-2xl font-bold text-center text-gray-800 mb-2">密码应用知识库</h1>
+          <p class="text-center text-gray-500 text-sm mb-6">请登录以继续</p>
+          <form id="login-form" class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">用户名</label>
+              <input name="username" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" required>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">密码</label>
+              <input type="password" name="password" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" required>
+            </div>
+            <div id="login-error" class="text-red-500 text-sm hidden"></div>
+            <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition font-medium">登 录</button>
+          </form>
+        </div>
+      </div>
+    `;
+
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const errorEl = document.getElementById('login-error');
+      errorEl.classList.add('hidden');
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: fd.get('username'), password: fd.get('password') })
+        });
+        if (res.ok) {
+          await this.checkAuth();
+          this.navigate('/');
+        } else {
+          const data = await res.json();
+          errorEl.textContent = data.error || '登录失败';
+          errorEl.classList.remove('hidden');
+        }
+      } catch {
+        errorEl.textContent = '网络错误';
+        errorEl.classList.remove('hidden');
+      }
+    });
+  },
+
+  // ─── Layout ─────────────────────────────────────
+  renderLayout(container, hash) {
+    const isAdmin = this.user.role === 'admin';
+
+    container.innerHTML = `
+      <!-- 导航栏 -->
+      <nav class="bg-white shadow-sm border-b sticky top-0 z-40">
+        <div class="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
+          <div class="flex items-center gap-4">
+            <a class="text-lg font-bold text-gray-800 cursor-pointer" onclick="App.navigate('/')">📚 密码应用知识库</a>
+          </div>
+          <div class="flex items-center gap-3">
+            ${isAdmin ? `
+              <a class="text-sm text-gray-600 hover:text-blue-600 cursor-pointer" onclick="App.navigate('/admin/users')">用户管理</a>
+              <a class="text-sm text-gray-600 hover:text-blue-600 cursor-pointer" onclick="App.navigate('/admin/logs')">操作日志</a>
+              <a class="text-sm text-gray-600 hover:text-blue-600 cursor-pointer" onclick="App.navigate('/admin/faq')">FAQ管理</a>
+            ` : ''}
+            <a class="text-sm text-gray-600 hover:text-blue-600 cursor-pointer" onclick="App.navigate('/faq')">FAQ</a>
+            <span class="text-sm text-gray-400 mx-2">|</span>
+            <span class="text-sm text-gray-600">${this.user.username}</span>
+            <button class="text-sm text-red-500 hover:text-red-700" onclick="App.logout()">退出</button>
+          </div>
+        </div>
+      </nav>
+
+      <!-- 主内容 -->
+      <main class="max-w-6xl mx-auto px-4 py-6" id="main-content"></main>
+    `;
+
+    this.renderPage(hash);
+  },
+
+  async renderPage(hash) {
+    const main = document.getElementById('main-content');
+    if (!main) return;
+
+    if (hash.startsWith('/admin/users')) await this.renderAdminUsers(main);
+    else if (hash.startsWith('/admin/logs')) await this.renderAdminLogs(main);
+    else if (hash.startsWith('/admin/faq')) await this.renderAdminFaq(main);
+    else if (hash.startsWith('/faq')) await this.renderFaq(main);
+    else await this.renderHome(main);
+  },
+
+  logout() {
+    fetch('/api/auth/logout', { method: 'POST' }).then(() => {
+      this.user = null;
+      this.navigate('/login');
+    });
+  },
+
+  // ─── Home: 文档列表 + 搜索 ─────────────────────
+  async renderHome(container) {
+    const isAdmin = this.user.role === 'admin';
+    container.innerHTML = `
+      <!-- 搜索栏 -->
+      <div class="bg-white rounded-xl shadow-sm p-4 mb-6">
+        <div class="flex gap-3">
+          <input id="search-input" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="搜索文档内容..." value="${this._lastQuery || ''}">
+          <select id="search-category" class="px-3 py-2 border border-gray-300 rounded-lg bg-white">
+            <option value="">全部分类</option>
+            <option value="方案" ${this._lastCategory === '方案' ? 'selected' : ''}>方案</option>
+            <option value="报告" ${this._lastCategory === '报告' ? 'selected' : ''}>报告</option>
+            <option value="标准法规参考" ${this._lastCategory === '标准法规参考' ? 'selected' : ''}>标准法规参考</option>
+            <option value="其他" ${this._lastCategory === '其他' ? 'selected' : ''}>其他</option>
+          </select>
+          <button id="search-btn" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">搜索</button>
+          ${isAdmin ? '<button id="upload-btn" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">+ 上传</button>' : ''}
+        </div>
+        <div id="search-stats" class="mt-2 text-sm text-gray-400"></div>
+      </div>
+
+      <!-- 搜索结果 / 文件列表 -->
+      <div id="content-area">
+        <div class="text-center py-12 text-gray-400">输入关键词搜索，或浏览分类</div>
+      </div>
+
+      <!-- 分类 Tabs -->
+      <div class="flex gap-1 mb-4 border-b" id="category-tabs">
+        ${['全部', ...['方案','报告','标准法规参考','其他']].map(c => `
+          <button class="px-4 py-2 text-sm text-gray-500 border-b-2 border-transparent hover:text-blue-600 transition ${c === (this._lastTab || '全部') ? 'tab-active' : ''}" data-cat="${c}">${c}</button>
+        `).join('')}
+      </div>
+
+      <!-- 文件列表 -->
+      <div id="file-list" class="space-y-2"></div>
+
+      <!-- 上传 Modal -->
+      <div id="upload-modal" class="hidden modal-overlay">
+        <div class="modal-content">
+          <h2 class="text-lg font-bold mb-4">上传文档</h2>
+          <form id="upload-form">
+            <input type="file" name="file" class="w-full mb-4 p-2 border rounded" required>
+            <div id="upload-progress" class="text-sm text-gray-500 mb-2"></div>
+            <div class="flex gap-2 justify-end">
+              <button type="button" class="px-4 py-2 text-gray-600 hover:text-gray-800" onclick="document.getElementById('upload-modal').classList.add('hidden')">取消</button>
+              <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">上传</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    `;
+
+    // 事件绑定
+    const searchBtn = document.getElementById('search-btn');
+    const searchInput = document.getElementById('search-input');
+    const searchCat = document.getElementById('search-category');
+
+    if (isAdmin) {
+      document.getElementById('upload-btn').onclick = () => {
+        document.getElementById('upload-modal').classList.remove('hidden');
+      };
+      document.getElementById('upload-form').onsubmit = async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        const prog = document.getElementById('upload-progress');
+        prog.textContent = '上传中...';
+        try {
+          const res = await fetch('/api/upload', { method: 'POST', body: fd });
+          if (res.ok) {
+            prog.textContent = '上传成功 ✓';
+            document.getElementById('upload-modal').classList.add('hidden');
+            this.loadFiles();
+          } else {
+            const data = await res.json();
+            prog.textContent = '失败: ' + (data.error || '未知错误');
+          }
+        } catch {
+          prog.textContent = '网络错误';
+        }
+      };
+    }
+
+    searchBtn.onclick = () => this.doSearch();
+    searchInput.onkeydown = (e) => { if (e.key === 'Enter') this.doSearch(); };
+
+    // Tab 切换
+    document.getElementById('category-tabs').querySelectorAll('button').forEach(btn => {
+      btn.onclick = () => {
+        this._lastTab = btn.dataset.cat;
+        this._lastCategory = '';
+        document.getElementById('search-category').value = '';
+        this.loadFiles();
+      };
+    });
+
+    // 默认加载文件
+    await this.loadFiles();
+  },
+
+  async loadFiles() {
+    const cat = this._lastTab === '全部' ? '' : this._lastTab;
+    try {
+      const res = await fetch(`/api/files${cat ? '?category=' + encodeURIComponent(cat) : ''}`);
+      const files = await res.json();
+      this.renderFileList(files);
+    } catch {
+      document.getElementById('file-list').innerHTML = '<div class="text-center py-8 text-red-500">加载失败</div>';
+    }
+  },
+
+  renderFileList(files) {
+    const el = document.getElementById('file-list');
+    const isAdmin = this.user.role === 'admin';
+    if (!files.length) {
+      el.innerHTML = '<div class="text-center py-12 text-gray-400">暂无文档</div>';
+      return;
+    }
+    // 去掉搜索结果统计的重复
+    document.getElementById('search-stats').textContent = `共 ${files.length} 个文件`;
+    el.innerHTML = files.map(f => {
+      const ext = (f.original_name || '').split('.').pop().toUpperCase();
+      const colorMap = { PDF: 'bg-red-500', DOCX: 'bg-blue-500', DOC: 'bg-blue-400', XLSX: 'bg-green-500', PPT: 'bg-orange-500', PPTX: 'bg-orange-500', MD: 'bg-gray-500', TXT: 'bg-gray-400' };
+      const bgColor = colorMap[ext] || 'bg-purple-500';
+      return `
+        <div class="bg-white rounded-lg shadow-sm p-3 flex items-center gap-3 hover:shadow-md transition">
+          <div class="file-icon ${bgColor}">${ext.slice(0,3)}</div>
+          <div class="flex-1 min-w-0">
+            <div class="text-sm font-medium text-gray-800 truncate">${this.escapeHtml(f.original_name)}</div>
+            <div class="text-xs text-gray-400 mt-0.5">
+              <span class="inline-block bg-gray-100 rounded px-1.5 py-0.5 text-xs">${f.category}</span>
+              <span class="ml-2">${f.created_at ? f.created_at.slice(0,10) : ''}</span>
+              ${f.file_size ? '<span class="ml-2">' + this.formatSize(f.file_size) + '</span>' : ''}
+            </div>
+          </div>
+          ${isAdmin ? `<button class="px-2 py-1 text-xs text-red-500 hover:text-red-700 hover:bg-red-50 rounded delete-file" data-id="${f.id}" data-name="${this.escapeHtml(f.original_name)}">删除</button>` : ''}
+        </div>
+      `;
+    }).join('');
+
+    if (isAdmin) {
+      el.querySelectorAll('.delete-file').forEach(btn => {
+        btn.onclick = async () => {
+          const name = btn.dataset.name;
+          if (!confirm(`确认删除「${name}」？`)) return;
+          const res = await fetch(`/api/files/${btn.dataset.id}`, { method: 'DELETE' });
+          if (res.ok) {
+            this.loadFiles();
+          } else {
+            alert('删除失败');
+          }
+        };
+      });
+    }
+  },
+
+  async doSearch() {
+    const q = document.getElementById('search-input').value.trim();
+    const cat = document.getElementById('search-category').value;
+    if (!q) return;
+    this._lastQuery = q;
+    this._lastCategory = cat;
+    try {
+      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}${cat ? '&category=' + encodeURIComponent(cat) : ''}`);
+      const results = await res.json();
+
+      // 隐藏 tabs，显示搜索结果
+      document.getElementById('category-tabs').classList.add('hidden');
+      const el = document.getElementById('file-list');
+      document.getElementById('search-stats').textContent = `搜索 "${q}" — 找到 ${results.length} 条结果`;
+      if (!results.length) {
+        el.innerHTML = '<div class="text-center py-12 text-gray-400">未找到相关内容</div>';
+      } else {
+        el.innerHTML = results.map(r => `
+          <div class="bg-white rounded-lg shadow-sm p-3 hover:shadow-md transition">
+            <div class="text-sm font-medium text-gray-800">${this.escapeHtml(r.original_name)}</div>
+            <div class="text-xs text-gray-400 mt-0.5">
+              <span class="inline-block bg-gray-100 rounded px-1.5 py-0.5 text-xs">${r.category}</span>
+              <span class="ml-2">${r.created_at ? r.created_at.slice(0,10) : ''}</span>
+            </div>
+            <div class="snippet mt-2">${this.escapeHtml(r.snippet || '')}</div>
+          </div>
+        `).join('');
+      }
+    } catch {
+      // fallback
+    }
+  },
+
+  // ─── Admin: 用户管理 ──────────────────────────
+  async renderAdminUsers(container) {
+    container.innerHTML = `
+      <h1 class="text-xl font-bold mb-4">用户管理</h1>
+      <button id="add-user-btn" class="mb-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">+ 添加用户</button>
+      <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+        <table class="w-full text-sm">
+          <thead><tr class="bg-gray-50 border-b"><th class="text-left p-3">用户名</th><th class="text-left p-3">角色</th><th class="text-left p-3">创建时间</th><th class="text-left p-3">操作</th></tr></thead>
+          <tbody id="user-table-body"></tbody>
+        </table>
+      </div>
+      <div id="add-user-modal" class="hidden modal-overlay">
+        <div class="modal-content">
+          <h2 class="text-lg font-bold mb-4">添加用户</h2>
+          <form id="add-user-form" class="space-y-3">
+            <div><label class="block text-sm font-medium mb-1">用户名</label><input name="username" class="w-full px-3 py-2 border rounded" required></div>
+            <div><label class="block text-sm font-medium mb-1">密码（至少6位）</label><input type="password" name="password" class="w-full px-3 py-2 border rounded" required minlength="6"></div>
+            <div><label class="block text-sm font-medium mb-1">角色</label>
+              <select name="role" class="w-full px-3 py-2 border rounded bg-white">
+                <option value="engineer">普通工程师</option>
+                <option value="admin">管理员</option>
+              </select>
+            </div>
+            <div id="add-user-error" class="text-red-500 text-sm hidden"></div>
+            <div class="flex gap-2 justify-end">
+              <button type="button" class="px-4 py-2 text-gray-600" onclick="document.getElementById('add-user-modal').classList.add('hidden')">取消</button>
+              <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg">添加</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    `;
+
+    this.loadUsers();
+
+    document.getElementById('add-user-btn').onclick = () => {
+      document.getElementById('add-user-modal').classList.remove('hidden');
+    };
+    document.getElementById('add-user-form').onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const errEl = document.getElementById('add-user-error');
+      errEl.classList.add('hidden');
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: fd.get('username'), password: fd.get('password'), role: fd.get('role') })
+      });
+      if (res.ok) {
+        document.getElementById('add-user-modal').classList.add('hidden');
+        e.target.reset();
+        this.loadUsers();
+      } else {
+        const data = await res.json();
+        errEl.textContent = data.error || '创建失败';
+        errEl.classList.remove('hidden');
+      }
+    };
+  },
+
+  async loadUsers() {
+    try {
+      const res = await fetch('/api/admin/users');
+      const users = await res.json();
+      const tbody = document.getElementById('user-table-body');
+      tbody.innerHTML = users.map(u => `
+        <tr class="border-b hover:bg-gray-50">
+          <td class="p-3">${this.escapeHtml(u.username)}</td>
+          <td class="p-3"><span class="px-2 py-0.5 rounded text-xs ${u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}">${u.role === 'admin' ? '管理员' : '工程师'}</span></td>
+          <td class="p-3 text-gray-500">${u.created_at ? u.created_at.slice(0,10) : ''}</td>
+          <td class="p-3">
+            ${u.id !== this.user.id ? `<button class="text-xs text-red-500 hover:text-red-700 delete-user" data-id="${u.id}" data-name="${this.escapeHtml(u.username)}">删除</button>` : '<span class="text-xs text-gray-400">当前用户</span>'}
+          </td>
+        </tr>
+      `).join('');
+
+      tbody.querySelectorAll('.delete-user').forEach(btn => {
+        btn.onclick = async () => {
+          if (!confirm(`确认删除用户「${btn.dataset.name}」？`)) return;
+          const res = await fetch(`/api/admin/users/${btn.dataset.id}`, { method: 'DELETE' });
+          if (res.ok) this.loadUsers();
+          else alert('删除失败');
+        };
+      });
+    } catch {
+      document.getElementById('user-table-body').innerHTML = '<tr><td colspan="4" class="p-3 text-red-500">加载失败</td></tr>';
+    }
+  },
+
+  // ─── Admin: 操作日志 ──────────────────────────
+  async renderAdminLogs(container) {
+    container.innerHTML = `
+      <h1 class="text-xl font-bold mb-4">操作日志</h1>
+      <div class="mb-4 flex gap-2 items-center">
+        <label class="text-sm text-gray-600">显示最近</label>
+        <select id="log-days" class="px-2 py-1 border rounded text-sm bg-white">
+          <option value="7">7天</option>
+          <option value="30" selected>30天</option>
+          <option value="90">90天</option>
+          <option value="180">180天</option>
+        </select>
+        <button id="log-refresh" class="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">刷新</button>
+        <span id="log-total" class="text-sm text-gray-400 ml-2"></span>
+      </div>
+      <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+        <table class="w-full text-sm">
+          <thead><tr class="bg-gray-50 border-b"><th class="text-left p-3">时间</th><th class="text-left p-3">操作人</th><th class="text-left p-3">操作</th><th class="text-left p-3">详情</th></tr></thead>
+          <tbody id="log-table-body"></tbody>
+        </table>
+      </div>
+    `;
+
+    const loadLogs = async () => {
+      const days = document.getElementById('log-days').value;
+      try {
+        const res = await fetch(`/api/admin/logs?days=${days}&limit=200`);
+        const data = await res.json();
+        document.getElementById('log-total').textContent = `共 ${data.total} 条`;
+        const tbody = document.getElementById('log-table-body');
+        tbody.innerHTML = data.logs.map(l => `
+          <tr class="border-b hover:bg-gray-50">
+            <td class="p-3 text-gray-500 whitespace-nowrap">${l.created_at}</td>
+            <td class="p-3">${this.escapeHtml(l.username || '系统')}</td>
+            <td class="p-3"><span class="px-2 py-0.5 rounded text-xs bg-gray-100">${l.action_label || l.action}</span></td>
+            <td class="p-3 text-gray-600">${this.escapeHtml(l.detail || '')}</td>
+          </tr>
+        `).join('');
+        if (!data.logs.length) {
+          tbody.innerHTML = '<tr><td colspan="4" class="p-3 text-center text-gray-400">暂无日志</td></tr>';
+        }
+      } catch {
+        document.getElementById('log-table-body').innerHTML = '<tr><td colspan="4" class="p-3 text-red-500">加载失败</td></tr>';
+      }
+    };
+
+    await loadLogs();
+    document.getElementById('log-refresh').onclick = loadLogs;
+    document.getElementById('log-days').onchange = loadLogs;
+  },
+
+  // ─── FAQ ──────────────────────────────────────
+  async renderFaq(container) {
+    container.innerHTML = `
+      <h1 class="text-xl font-bold mb-4">密评 FAQ</h1>
+      <div class="mb-4">
+        <input id="faq-search" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="搜索 FAQ...">
+      </div>
+      <div id="faq-list" class="space-y-2"></div>
+    `;
+
+    const loadFaq = async (q) => {
+      try {
+        const url = q ? `/api/faq?q=${encodeURIComponent(q)}` : '/api/faq';
+        const res = await fetch(url);
+        const items = await res.json();
+        const el = document.getElementById('faq-list');
+        if (!items.length) {
+          el.innerHTML = '<div class="text-center py-12 text-gray-400">暂无 FAQ 条目</div>';
+          return;
+        }
+        el.innerHTML = items.map(f => `
+          <div class="bg-white rounded-lg shadow-sm overflow-hidden">
+            <div class="faq-question p-3 font-medium text-sm text-gray-800 flex items-center justify-between" data-id="${f.id}">
+              <span>${this.escapeHtml(f.question)}</span>
+              <span class="text-gray-400 text-xs ml-2">▼</span>
+            </div>
+            <div class="faq-answer p-3 pt-0 text-sm text-gray-600 leading-relaxed">${this.escapeHtml(f.answer)}</div>
+          </div>
+        `).join('');
+        el.querySelectorAll('.faq-question').forEach(qel => {
+          qel.onclick = () => {
+            const answer = qel.nextElementSibling;
+            answer.classList.toggle('open');
+            qel.querySelector('span:last-child').textContent = answer.classList.contains('open') ? '▲' : '▼';
+          };
+        });
+      } catch {
+        document.getElementById('faq-list').innerHTML = '<div class="text-center py-8 text-red-500">加载失败</div>';
+      }
+    };
+
+    await loadFaq('');
+    document.getElementById('faq-search').onkeydown = (e) => {
+      if (e.key === 'Enter') loadFaq(e.target.value.trim());
+    };
+  },
+
+  // ─── Admin: FAQ 管理 ─────────────────────────
+  async renderAdminFaq(container) {
+    container.innerHTML = `
+      <h1 class="text-xl font-bold mb-4">FAQ 管理</h1>
+      <button id="add-faq-btn" class="mb-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">+ 添加 FAQ</button>
+      <div id="admin-faq-list" class="space-y-2"></div>
+
+      <div id="faq-modal" class="hidden modal-overlay">
+        <div class="modal-content">
+          <h2 class="text-lg font-bold mb-4" id="faq-modal-title">添加 FAQ</h2>
+          <form id="faq-form" class="space-y-3">
+            <input type="hidden" name="id" value="">
+            <div><label class="block text-sm font-medium mb-1">问题</label><input name="question" class="w-full px-3 py-2 border rounded" required></div>
+            <div><label class="block text-sm font-medium mb-1">答案</label><textarea name="answer" rows="4" class="w-full px-3 py-2 border rounded" required></textarea></div>
+            <div><label class="block text-sm font-medium mb-1">分类标签（可选）</label><input name="category" class="w-full px-3 py-2 border rounded"></div>
+            <div class="flex gap-2 justify-end">
+              <button type="button" class="px-4 py-2 text-gray-600" onclick="document.getElementById('faq-modal').classList.add('hidden')">取消</button>
+              <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg">保存</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    `;
+
+    const loadFaq = async () => {
+      try {
+        const res = await fetch('/api/faq');
+        const items = await res.json();
+        const el = document.getElementById('admin-faq-list');
+        if (!items.length) {
+          el.innerHTML = '<div class="text-center py-8 text-gray-400">暂无 FAQ 条目</div>';
+          return;
+        }
+        el.innerHTML = items.map(f => `
+          <div class="bg-white rounded-lg shadow-sm p-3 flex items-start gap-3">
+            <div class="flex-1 min-w-0">
+              <div class="text-sm font-medium">${this.escapeHtml(f.question)}</div>
+              <div class="text-xs text-gray-500 mt-1 line-clamp-2">${this.escapeHtml(f.answer)}</div>
+            </div>
+            <div class="flex gap-1 flex-shrink-0">
+              <button class="px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded edit-faq" data='${JSON.stringify(f).replace(/'/g,"&#39;")}'>编辑</button>
+              <button class="px-2 py-1 text-xs text-red-500 hover:bg-red-50 rounded delete-faq" data-id="${f.id}">删除</button>
+            </div>
+          </div>
+        `).join('');
+        el.querySelectorAll('.edit-faq').forEach(btn => {
+          btn.onclick = () => {
+            const f = JSON.parse(btn.dataset.item);
+            const form = document.getElementById('faq-form');
+            form.elements.id.value = f.id;
+            form.elements.question.value = f.question;
+            form.elements.answer.value = f.answer;
+            form.elements.category.value = f.category || '';
+            document.getElementById('faq-modal-title').textContent = '编辑 FAQ';
+            document.getElementById('faq-modal').classList.remove('hidden');
+          };
+        });
+        el.querySelectorAll('.delete-faq').forEach(btn => {
+          btn.onclick = async () => {
+            if (!confirm('确认删除此 FAQ？')) return;
+            const res = await fetch(`/api/faq/${btn.dataset.id}`, { method: 'DELETE' });
+            if (res.ok) loadFaq();
+          };
+        });
+      } catch {
+        document.getElementById('admin-faq-list').innerHTML = '<div class="text-center py-8 text-red-500">加载失败</div>';
+      }
+    };
+
+    await loadFaq();
+
+    document.getElementById('add-faq-btn').onclick = () => {
+      document.getElementById('faq-form').reset();
+      document.getElementById('faq-form').elements.id.value = '';
+      document.getElementById('faq-modal-title').textContent = '添加 FAQ';
+      document.getElementById('faq-modal').classList.remove('hidden');
+    };
+
+    document.getElementById('faq-form').onsubmit = async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const id = fd.get('id');
+      const payload = { question: fd.get('question'), answer: fd.get('answer'), category: fd.get('category') };
+      const method = id ? 'PUT' : 'POST';
+      const url = id ? `/api/faq/${id}` : '/api/faq';
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if (res.ok) {
+        document.getElementById('faq-modal').classList.add('hidden');
+        loadFaq();
+      } else {
+        alert('保存失败');
+      }
+    };
+  },
+
+  // ─── 工具函数 ─────────────────────────────────
+  escapeHtml(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  },
+
+  formatSize(bytes) {
+    if (!bytes) return '';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+    return (bytes/1024/1024).toFixed(1) + ' MB';
+  }
+};
+
+// ─── 启动 ──────────────────────────────────────
+App.init();
+</script>
+</body>
+</html>

@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>登录页特效 Demo</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Noto Sans SC','PingFang SC',sans-serif;background:#0a0e1a;color:#e0e8f0;padding:20px}
+  h1{text-align:center;font-size:1.4rem;margin:1rem 0;background:linear-gradient(135deg,#8abdf0,#3b82f6,#7c3aed);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+  h1 small{display:block;font-size:0.7rem;-webkit-text-fill-color:#6a8fb0;margin-top:4px}
+  .demo-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:20px;max-width:1400px;margin:0 auto}
+  .demo-card{border-radius:16px;overflow:hidden;border:1px solid rgba(0,200,255,0.12);background:rgba(8,18,38,0.4)}
+  .demo-card .preview{height:320px;position:relative;overflow:hidden}
+  .demo-card .label{font-size:0.85rem;font-weight:600;padding:12px 16px;background:rgba(0,0,0,0.3);border-bottom:1px solid rgba(0,200,255,0.08)}
+  .demo-card .desc{padding:10px 16px 14px;font-size:0.75rem;color:#7a9ab8;line-height:1.5}
+  .demo-card .tag{display:inline-block;font-size:0.6rem;padding:2px 8px;border-radius:10px;background:rgba(0,200,255,0.1);color:#5cc5ff;margin:0 4px 4px 0}
+  /* 预览区通用 - 模拟登录页 */
+  .preview-bg{width:100%;height:100%;display:flex;align-items:center;justify-content:center;position:relative}
+  .preview-card{width:200px;padding:1.2rem 1rem;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);background:rgba(8,18,38,0.5);border:1px solid rgba(0,200,255,0.12);border-radius:1.2rem;text-align:center;position:relative;z-index:2}
+  .preview-card .p-title{font-size:0.75rem;background:linear-gradient(135deg,#8abdf0,#3b82f6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:4px}
+  .preview-card .p-input{width:100%;padding:6px 10px;background:rgba(0,20,45,0.4);border:1px solid rgba(0,180,255,0.15);border-radius:20px;color:#e0e8f0;font-size:0.65rem;margin-top:6px;outline:none}
+  .preview-card .p-btn{width:100%;padding:6px;background:rgba(0,200,255,0.15);border:1px solid rgba(0,200,255,0.3);border-radius:20px;color:#5cc5ff;font-size:0.65rem;margin-top:8px;text-align:center}
+
+  /* ======== 特效 1：渐变波纹 ======== */
+  .fx-1{background:#060d1a}
+  .fx-1 .wave-bg{position:absolute;top:0;left:0;width:100%;height:100%;overflow:hidden}
+  .fx-1 .wave-bg .ring{position:absolute;border-radius:50%;border:1px solid rgba(0,200,255,0.06);animation:fx1Wave 8s ease-in-out infinite}
+  .fx-1 .wave-bg .ring:nth-child(1){width:300px;height:300px;top:-50px;left:-80px;border-color:rgba(0,200,255,0.08);animation-delay:0s}
+  .fx-1 .wave-bg .ring:nth-child(2){width:400px;height:400px;bottom:-100px;right:-100px;border-color:rgba(139,92,246,0.06);animation-delay:-2s}
+  .fx-1 .wave-bg .ring:nth-child(3){width:200px;height:200px;top:40%;left:60%;border-color:rgba(0,200,255,0.04);animation-delay:-4s}
+  .fx-1 .wave-bg .ring:nth-child(4){width:500px;height:500px;top:-200px;right:-150px;border-color:rgba(100,200,255,0.04);animation-delay:-6s}
+  @keyframes fx1Wave{0%,100%{transform:scale(1);opacity:0.6}50%{transform:scale(1.15);opacity:0.3}}
+
+  /* ======== 特效 2：科技网格 ======== */
+  .fx-2{background:radial-gradient(ellipse at 30% 40%,#0b1a2e 0%,#060d1a 100%)}
+  .fx-2 .grid-overlay{position:absolute;top:0;left:0;width:100%;height:100%;
+    background-image:
+      linear-gradient(rgba(0,200,255,0.04) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(0,200,255,0.04) 1px,transparent 1px);
+    background-size:30px 30px;
+    mask:radial-gradient(ellipse at 50% 50%,rgba(0,0,0,0.3) 0%,transparent 70%);
+    -webkit-mask:radial-gradient(ellipse at 50% 50%,rgba(0,0,0,0.3) 0%,transparent 70%);
+  }
+  .fx-2 .grid-glow{position:absolute;width:200px;height:200px;top:50%;left:50%;transform:translate(-50%,-50%);background:radial-gradient(circle,rgba(0,200,255,0.08) 0%,transparent 60%);filter:blur(30px)}
+  .fx-2 .grid-dot{position:absolute;width:3px;height:3px;border-radius:50%;background:rgba(0,200,255,0.15)}
+  .fx-2 .grid-dot:nth-child(2){top:30%;left:20%}
+  .fx-2 .grid-dot:nth-child(3){top:60%;left:75%}
+  .fx-2 .grid-dot:nth-child(4){top:70%;left:30%}
+  .fx-2 .grid-dot:nth-child(5){top:20%;left:70%}
+
+  /* ======== 特效 3：波浪线条 ======== */
+  .fx-3{background:#060d1a}
+  .fx-3 .wave-svg{position:absolute;bottom:0;left:0;width:100%;height:60%}
+  .fx-3 .wave-svg svg{width:100%;height:100%}
+  .fx-3 .wave-overlay{position:absolute;top:0;left:0;width:100%;height:100%;background:linear-gradient(180deg,rgba(6,13,26,0.3) 0%,transparent 40%,transparent 60%,rgba(6,13,26,0.4) 100%)}
+
+  /* ======== 特效 4：彩色光斑 ======== */
+  .fx-4{background:#060d1a}
+  .fx-4 .spot{position:absolute;border-radius:50%;filter:blur(50px);animation:fx4Drift 12s ease-in-out infinite}
+  .fx-4 .spot:nth-child(1){width:180px;height:180px;top:5%;left:5%;background:rgba(0,180,255,0.12);animation-delay:0s}
+  .fx-4 .spot:nth-child(2){width:150px;height:150px;bottom:5%;right:5%;background:rgba(139,92,246,0.1);animation-delay:-4s}
+  .fx-4 .spot:nth-child(3){width:120px;height:120px;top:40%;left:50%;background:rgba(0,200,255,0.08);animation-delay:-8s}
+  @keyframes fx4Drift{0%,100%{transform:translate(0,0) scale(1)}25%{transform:translate(20px,-15px) scale(1.1)}50%{transform:translate(-10px,10px) scale(0.95)}75%{transform:translate(15px,5px) scale(1.05)}}
+
+  /* ======== 特效 5：字符雨 ======== */
+  .fx-5{background:#060d1a}
+  .fx-5 .rain-wrap{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;justify-content:space-around;overflow:hidden}
+  .fx-5 .rain-col{display:flex;flex-direction:column;animation:fx5Rain 6s linear infinite;font-size:0.55rem;font-family:'Courier New',monospace;color:rgba(0,238,255,0.15);letter-spacing:2px;writing-mode:vertical-lr}
+  .fx-5 .rain-col:nth-child(2){animation-delay:-1.5s;color:rgba(0,238,255,0.1)}
+  .fx-5 .rain-col:nth-child(3){animation-delay:-3s;color:rgba(0,238,255,0.12)}
+  .fx-5 .rain-col:nth-child(4){animation-delay:-4.5s;color:rgba(0,238,255,0.08)}
+  .fx-5 .rain-col:nth-child(5){animation-delay:-2s;color:rgba(0,238,255,0.1)}
+  @keyframes fx5Rain{0%{transform:translateY(-100%)}100%{transform:translateY(100%)}}
+</style>
+</head>
+<body>
+<h1>🎨 登录页背景特效方案 <small>实际页面会叠加毛玻璃登录卡片，看看哪个整体效果最搭</small></h1>
+
+<div class="demo-grid">
+
+  <!-- 方案1: 渐变波纹 -->
+  <div class="demo-card">
+    <div class="label">#1 渐变波纹</div>
+    <div class="preview fx-1">
+      <div class="wave-bg"><div class="ring"></div><div class="ring"></div><div class="ring"></div><div class="ring"></div></div>
+      <div class="preview-bg"><div class="preview-card"><div class="p-title">密评知识库</div><div class="p-input">用户名</div><div class="p-input">密码</div><div class="p-btn">登 录</div></div></div>
+    </div>
+    <div class="desc">
+      <span class="tag">纯CSS</span><span class="tag">低功耗</span><span class="tag">平滑流转</span>
+      多层圆环缓慢缩放 + 半透明渐变背景，安静高级、不打扰。
+    </div>
+  </div>
+
+  <!-- 方案2: 科技网格 -->
+  <div class="demo-card">
+    <div class="label">#2 科技网格</div>
+    <div class="preview fx-2">
+      <div class="grid-overlay"></div>
+      <div class="grid-glow"></div>
+      <div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div><div class="grid-dot"></div>
+      <div class="preview-bg"><div class="preview-card"><div class="p-title">密评知识库</div><div class="p-input">用户名</div><div class="p-input">密码</div><div class="p-btn">登 录</div></div></div>
+    </div>
+    <div class="desc">
+      <span class="tag">纯CSS</span><span class="tag">科技感</span><span class="tag">极简</span>
+      细网格线从中心向外渐隐 + 中心光晕 + 稀疏点缀点。静态格调，不动也不打扰。
+    </div>
+  </div>
+
+  <!-- 方案3: 波浪线条 -->
+  <div class="demo-card">
+    <div class="label">#3 动态波浪</div>
+    <div class="preview fx-3">
+      <div class="wave-svg">
+        <svg viewBox="0 0 400 120" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="wg1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="rgba(0,200,255,0.25)"/><stop offset="100%" stop-color="rgba(0,200,255,0)"/></linearGradient>
+            <linearGradient id="wg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="rgba(100,200,255,0.18)"/><stop offset="100%" stop-color="rgba(100,200,255,0)"/></linearGradient>
+            <linearGradient id="wg3" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="rgba(139,92,246,0.12)"/><stop offset="100%" stop-color="rgba(139,92,246,0)"/></linearGradient>
+          </defs>
+          <path d="M0,60 Q50,30 100,55 T200,45 T300,55 T400,50 L400,120 L0,120 Z" fill="url(#wg1)"><animate attributeName="d" dur="6s" repeatCount="indefinite" values="M0,60 Q50,30 100,55 T200,45 T300,55 T400,50 L400,120 L0,120 Z;M0,55 Q50,65 100,40 T200,55 T300,40 T400,55 L400,120 L0,120 Z;M0,60 Q50,30 100,55 T200,45 T300,55 T400,50 L400,120 L0,120 Z"/></path>
+          <path d="M0,70 Q60,45 120,65 T240,55 T360,65 T400,60 L400,120 L0,120 Z" fill="url(#wg2)"><animate attributeName="d" dur="8s" repeatCount="indefinite" values="M0,70 Q60,45 120,65 T240,55 T360,65 T400,60 L400,120 L0,120 Z;M0,65 Q60,75 120,55 T240,65 T360,50 T400,65 L400,120 L0,120 Z;M0,70 Q60,45 120,65 T240,55 T360,65 T400,60 L400,120 L0,120 Z"/></path>
+          <path d="M0,80 Q70,60 140,75 T280,65 T400,75 L400,120 L0,120 Z" fill="url(#wg3)"><animate attributeName="d" dur="10s" repeatCount="indefinite" values="M0,80 Q70,60 140,75 T280,65 T400,75 L400,120 L0,120 Z;M0,75 Q70,85 140,65 T280,75 T400,60 L400,120 L0,120 Z;M0,80 Q70,60 140,75 T280,65 T400,75 L400,120 L0,120 Z"/></path>
+        </svg>
+      </div>
+      <div class="wave-overlay"></div>
+      <div class="preview-bg"><div class="preview-card"><div class="p-title">密评知识库</div><div class="p-input">用户名</div><div class="p-input">密码</div><div class="p-btn">登 录</div></div></div>
+    </div>
+    <div class="desc">
+      <span class="tag">纯CSS+SVG</span><span class="tag">动态</span><span class="tag">柔美</span>
+      底部三层波纹缓缓流动（青 + 蓝紫渐变），顶部渐隐不干扰卡片。类似 SaaS 产品登录页风格。
+    </div>
+  </div>
+
+  <!-- 方案4: 彩色光斑 -->
+  <div class="demo-card">
+    <div class="label">#4 彩色光斑</div>
+    <div class="preview fx-4">
+      <div class="spot"></div><div class="spot"></div><div class="spot"></div>
+      <div class="preview-bg"><div class="preview-card"><div class="p-title">密评知识库</div><div class="p-input">用户名</div><div class="p-input">密码</div><div class="p-btn">登 录</div></div></div>
+    </div>
+    <div class="desc">
+      <span class="tag">纯CSS</span><span class="tag">低功耗</span><span class="tag">干净</span>
+      3个模糊光斑各自缓慢漂移（蓝+紫+青），极简中透质感，连网格/波纹都不需要。
+    </div>
+  </div>
+
+  <!-- 方案5: 字符雨 -->
+  <div class="demo-card">
+    <div class="label">#5 密评字符雨</div>
+    <div class="preview fx-5">
+      <div class="rain-wrap">
+        <div class="rain-col">密评SM2密评SM3GM/T密评</div>
+        <div class="rain-col">SM2密评GM/T0034SM3</div>
+        <div class="rain-col">密评VPN密评密码SM2</div>
+        <div class="rain-col">GM/T密评SM3密评算法</div>
+        <div class="rain-col">密评SM2密码方案GM/T</div>
+      </div>
+      <div class="preview-bg"><div class="preview-card"><div class="p-title">密评知识库</div><div class="p-input">用户名</div><div class="p-input">密码</div><div class="p-btn">登 录</div></div></div>
+    </div>
+    <div class="desc">
+      <span class="tag">纯CSS</span><span class="tag">赛博朋克</span><span class="tag">最炫</span>
+      竖排「密评/SM2/GM/T/密码/算法」字符流缓缓落下，类似 Matrix 但密度较低、不刺眼。
+    </div>
+  </div>
+
+</div>
+
+<p style="text-align:center;margin-top:24px;color:#5a7a98;font-size:0.8rem">打开此页面看各方案动态效果，告诉我哪个方案好，我再把它集成到登录页</p>
+</body>
+</html>

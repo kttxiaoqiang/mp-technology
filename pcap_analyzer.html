@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>密评抓包分析工具</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #f0f2f5; color: #333; min-height: 100vh;
+  }
+  .header {
+    background: linear-gradient(135deg, #1a5276, #2e86c1);
+    color: #fff; padding: 20px 40px;
+  }
+  .header h1 { font-size: 22px; }
+  .header p { font-size: 13px; opacity: 0.85; margin-top: 4px; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+
+  /* Upload Area */
+  .upload-area {
+    background: #fff; border-radius: 8px; padding: 30px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px;
+  }
+  .upload-area h2 { font-size: 16px; margin-bottom: 16px; color: #1a5276; }
+  .form-row {
+    display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;
+  }
+  .form-group { flex: 1; min-width: 200px; }
+  .form-group label {
+    display: block; font-size: 12px; color: #666; margin-bottom: 4px; font-weight: 600;
+  }
+  .form-group input[type="text"],
+  .file-label {
+    width: 100%; padding: 8px 12px; border: 1px solid #d0d5dd;
+    border-radius: 6px; font-size: 14px; background: #fff; cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  .form-group input[type="text"]:focus { border-color: #2e86c1; outline: none; }
+  .file-label:hover { border-color: #2e86c1; }
+  .file-label { display: flex; align-items: center; gap: 8px; }
+  .file-label svg { width: 18px; height: 18px; fill: #666; flex-shrink: 0; }
+  .file-label .filename { color: #666; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  input[type="file"] { display: none; }
+  .btn {
+    padding: 8px 24px; border: none; border-radius: 6px; font-size: 14px;
+    cursor: pointer; transition: all 0.2s; font-weight: 600;
+    white-space: nowrap;
+  }
+  .btn-primary {
+    background: #2e86c1; color: #fff;
+  }
+  .btn-primary:hover { background: #1a5276; }
+  .btn-primary:disabled { background: #7fb3d8; cursor: not-allowed; }
+  .btn-sm { padding: 4px 12px; font-size: 12px; }
+  .btn-success { background: #27ae60; color: #fff; }
+  .btn-success:hover { background: #1e8449; }
+  .btn-warning { background: #e67e22; color: #fff; }
+  .btn-warning:hover { background: #c9690e; }
+  .hint { font-size: 12px; color: #999; margin-top: 4px; }
+
+  /* Status */
+  .status { display: none; padding: 12px 16px; border-radius: 6px; margin-top: 12px; font-size: 14px; }
+  .status.loading {
+    display: block; background: #eaf2f8; color: #1a5276; border: 1px solid #aed6f1;
+  }
+  .status.error {
+    display: block; background: #fdedec; color: #922b21; border: 1px solid #f5b7b1;
+  }
+  .spinner {
+    display: inline-block; width: 14px; height: 14px; border: 2px solid #aed6f1;
+    border-top-color: #1a5276; border-radius: 50%; animation: spin 0.6s linear infinite;
+    margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Stats */
+  .stats-bar {
+    display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap;
+  }
+  .stat-card {
+    flex: 1; min-width: 150px; background: #fff; border-radius: 8px;
+    padding: 16px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+  .stat-card .num { font-size: 28px; font-weight: 700; color: #1a5276; }
+  .stat-card .label { font-size: 12px; color: #999; margin-top: 2px; }
+
+  /* Server Cards */
+  .server-card {
+    background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    margin-bottom: 16px; overflow: hidden;
+  }
+  .server-header {
+    padding: 14px 20px; background: #f8f9fa; border-bottom: 1px solid #eee;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .server-header .ip { font-size: 16px; font-weight: 700; color: #1a5276; }
+  .server-header .badge {
+    font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600;
+  }
+  .badge-cert { background: #d4efdf; color: #1e8449; }
+  .server-body { padding: 16px 20px; }
+
+  /* Cipher Suite Info */
+  .cipher-section { margin-bottom: 16px; }
+  .section-title { font-size: 14px; font-weight: 600; color: #555; margin-bottom: 8px; }
+  .cipher-box {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 8px 14px; border-radius: 6px; font-size: 13px; font-family: 'Courier New', monospace;
+  }
+  .cipher-box.national { background: #fef9e7; border: 1px solid #f9e79f; color: #9a7d0a; }
+  .cipher-box.international { background: #eaf2f8; border: 1px solid #aed6f1; color: #1a5276; }
+  .cipher-box.weak { background: #fdedec; border: 1px solid #f5b7b1; color: #922b21; }
+
+  /* Certificates */
+  .cert-card {
+    background: #f8f9fa; border-radius: 6px; padding: 14px; margin-bottom: 10px;
+    border-left: 3px solid #2e86c1;
+  }
+  .cert-card.self-signed { border-left-color: #e67e22; }
+  .cert-card .field { display: flex; margin-bottom: 4px; font-size: 13px; }
+  .cert-card .field .key { min-width: 100px; color: #888; flex-shrink: 0; }
+  .cert-card .field .val { color: #333; word-break: break-all; }
+  .cert-card .field .val.subject-name { font-weight: 600; color: #1a5276; }
+  .san-list { display: flex; flex-wrap: wrap; gap: 4px; }
+  .san-tag {
+    font-size: 11px; padding: 1px 6px; border-radius: 3px;
+    background: #eaf2f8; color: #2e86c1;
+  }
+  .tag-list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .ku-tag {
+    font-size: 11px; padding: 2px 6px; border-radius: 3px;
+    background: #ebf5fb; color: #2980b9; border: 1px solid #aed6f1;
+  }
+  .eku-tag {
+    font-size: 11px; padding: 2px 6px; border-radius: 3px;
+    background: #f4f6f7; color: #717d7e; border: 1px solid #d5dbdb;
+  }
+
+  /* Actions */
+  .actions { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+
+  /* No results */
+  .empty-state {
+    text-align: center; padding: 60px 20px; color: #999;
+  }
+  .empty-state svg { width: 64px; height: 64px; fill: #d5dbdb; margin-bottom: 16px; }
+  .empty-state h3 { font-size: 16px; color: #666; margin-bottom: 8px; }
+
+  /* Footer */
+  .footer { text-align: center; padding: 30px; color: #999; font-size: 12px; }
+
+  @media (max-width: 768px) {
+    .header { padding: 16px 20px; }
+    .container { padding: 12px; }
+    .form-row { flex-direction: column; }
+    .stat-card { min-width: 120px; }
+    .cert-card .field { flex-direction: column; }
+    .cert-card .field .key { min-width: auto; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🔐 密评抓包分析工具</h1>
+  <p>上传 Wireshark / tcpdump 抓包文件（PCAP/PCAPNG），自动提取服务器数字证书和密码套件信息</p>
+</div>
+
+<div class="container">
+  <div class="upload-area">
+    <h2>上传抓包文件</h2>
+    <div class="form-row">
+      <div class="form-group" style="flex:2;min-width:250px">
+        <label>选择 PCAP 文件</label>
+        <label class="file-label" for="pcap_file">
+          <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zM6 20V4h7v5h5v11H6z"/></svg>
+          <span class="filename" id="file_name">点击选择 .pcap / .pcapng 文件</span>
+        </label>
+        <input type="file" id="pcap_file" accept=".pcap,.pcapng,.cap">
+        <div class="hint">支持 Wireshark / tcpdump / npcap 等生成的 PCAP 和 PCAPNG 格式</div>
+      </div>
+      <div class="form-group">
+        <label>服务器 IP 地址（可选）</label>
+        <input type="text" id="server_ip" placeholder="例如 192.168.1.100">
+        <div class="hint">留空则自动提取所有发现的服务器证书</div>
+      </div>
+      <div class="form-group" style="flex:0">
+        <button class="btn btn-primary" id="analyze_btn" onclick="analyze()">开始分析</button>
+      </div>
+    </div>
+    <div class="status" id="status"></div>
+  </div>
+
+  <div id="results">
+    <div class="empty-state">
+      <svg viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V6h5.17l2 2H20v10z"/></svg>
+      <h3>等待分析</h3>
+      <p>上传抓包文件并点击"开始分析"</p>
+    </div>
+  </div>
+
+  <div class="footer">
+    密评抓包分析工具 v1.0 | 本工具不保存上传文件
+  </div>
+</div>
+
+<script>
+let currentResult = null;
+
+document.getElementById('pcap_file').addEventListener('change', function(e) {
+  const name = e.target.files[0] ? e.target.files[0].name : '点击选择 .pcap / .pcapng 文件';
+  document.getElementById('file_name').textContent = name;
+});
+
+function setStatus(html, type) {
+  const el = document.getElementById('status');
+  el.innerHTML = html;
+  el.className = 'status ' + type;
+}
+
+async function analyze() {
+  const fileInput = document.getElementById('pcap_file');
+  const serverIp = document.getElementById('server_ip').value.trim();
+  const btn = document.getElementById('analyze_btn');
+
+  if (!fileInput.files || !fileInput.files[0]) {
+    setStatus('⚠️ 请先选择一个 PCAP/PCAPNG 文件', 'error');
+    return;
+  }
+
+  btn.disabled = true;
+  setStatus('<span class="spinner"></span> 正在分析抓包文件，请稍候...', 'loading');
+
+  const formData = new FormData();
+  formData.append('file', fileInput.files[0]);
+  if (serverIp) formData.append('server_ip', serverIp);
+
+  try {
+    const res = await fetch('/api/analyze', { method: 'POST', body: formData });
+    const data = await res.json();
+
+    if (!res.ok || !data.ok) {
+      setStatus('❌ 分析失败: ' + (data.error || '未知错误'), 'error');
+      btn.disabled = false;
+      return;
+    }
+
+    setStatus('✅ 分析完成! 发现 ' + data.servers_count + ' 个服务器，' +
+              '分析 ' + data.streams_analyzed + ' 条 TLS 流', '');
+    currentResult = data;
+    renderResults(data);
+
+  } catch (e) {
+    setStatus('❌ 请求失败: ' + e.message, 'error');
+  }
+
+  btn.disabled = false;
+}
+
+function renderResults(data) {
+  const el = document.getElementById('results');
+  const servers = data.servers || {};
+  const serverKeys = Object.keys(servers);
+
+  if (serverKeys.length === 0) {
+    el.innerHTML = '<div class="empty-state"><h3>未发现 TLS 流量</h3><p>抓包文件中未找到指定服务器的 TLS 握手信息</p></div>';
+    return;
+  }
+
+  // Stats
+  let totalCerts = 0;
+  for (const ip of serverKeys) {
+    totalCerts += (servers[ip].certificates || []).length;
+  }
+
+  let html = '<div class="stats-bar">';
+  html += '<div class="stat-card"><div class="num">' + serverKeys.length + '</div><div class="label">服务器</div></div>';
+  html += '<div class="stat-card"><div class="num">' + totalCerts + '</div><div class="label">证书</div></div>';
+  html += '<div class="stat-card"><div class="num">' + (data.streams_analyzed || 0) + '</div><div class="label">TLS 流</div></div>';
+  html += '<div class="stat-card"><div class="num">' + (data.total_tls_streams || 0) + '</div><div class="label">总计 TLS 握手</div></div>';
+  html += '</div>';
+
+  // Server cards
+  for (const ip of serverKeys) {
+    const srv = servers[ip];
+    const certs = srv.certificates || [];
+    const cs = srv.cipher_suite;
+
+    html += '<div class="server-card">';
+    html += '<div class="server-header">';
+    html += '<span class="ip">' + ip + '</span>';
+    html += '<span class="badge badge-cert">' + certs.length + ' 张证书</span>';
+    if (cs) {
+      html += '<span class="badge" style="background:#eaf2f8;color:#2e86c1">' + cs.cipher_suite_name + '</span>';
+    }
+    html += '</div>';
+    html += '<div class="server-body">';
+
+    // Cipher Suite
+    if (cs) {
+      html += '<div class="cipher-section">';
+      html += '<div class="section-title">🔑 协商密码套件</div>';
+      const csClass = cs.cipher_suite_type === '国密' ? 'national' :
+                      (cs.cipher_suite_type === '空加密(不安全)' || cs.cipher_suite_type === '弱密码(不安全)' ? 'weak' : 'international');
+      html += '<div class="cipher-box ' + csClass + '">';
+      html += '<strong>' + cs.cipher_suite_name + '</strong>';
+      if (cs.cipher_suite_type) {
+        html += '<span style="font-size:11px;opacity:0.7">| ' + cs.cipher_suite_type + '</span>';
+      }
+      html += '</div>';
+      html += '</div>';
+    }
+
+    // Server Hello 展开查看
+    if (srv.server_hello) {
+      const sh = srv.server_hello;
+      html += '<div class="cipher-section">';
+      html += '<div class="section-title" style="cursor:pointer;user-select:none" onclick="toggleServerHello(this)">';
+      html += '📩 Server Hello <span class="sh-toggle" style="font-size:12px;opacity:0.6">▶ 展开查看详情</span>';
+      html += '</div>';
+      html += '<div class="server-hello-detail" style="display:none;background:#f8f9fa;border:1px solid #e0e0e0;border-radius:6px;padding:12px;font-size:13px">';
+      html += '<table style="width:100%;border-collapse:collapse">';
+      function shRow(label, val) { return '<tr><td style="padding:3px 8px;color:#888;white-space:nowrap;width:120px;vertical-align:top">' + label + '</td><td style="padding:3px 8px;word-break:break-all;font-family:monospace;font-size:12px">' + val + '</td></tr>'; }
+      html += shRow('TLS 版本', sh.version_name + ' (' + sh.version_code + ')');
+      html += shRow('密码套件', esc(sh.cipher_suite_name) + ' (' + sh.cipher_suite_code + ')');
+      html += shRow('套件类型', sh.cipher_suite_type || '');
+      html += shRow('压缩算法', esc(sh.compression || ''));
+      html += shRow('Random (hex)', '<span style="font-size:11px">' + esc(sh.random_full || sh.random_hex || '') + '</span>');
+      if (sh.session_id) {
+        html += shRow('Session ID', '<span style="font-size:11px">' + esc(sh.session_id_full || sh.session_id) + '</span>');
+      }
+      if (sh.extensions && sh.extensions.length > 0) {
+        html += '<tr><td style="padding:3px 8px;color:#888;white-space:nowrap;vertical-align:top">Extensions</td><td style="padding:3px 8px">';
+        for (const ext of sh.extensions) {
+          html += '<div style="margin-bottom:4px;padding:4px 8px;background:#fff;border-radius:4px;border:1px solid #eee">';
+          html += '<div style="font-weight:600;color:#1a5276;font-size:12px">' + esc(ext.name) + ' (' + ext.type + ')</div>';
+          html += '<div style="font-size:11px;color:#888">长度: ' + ext.length + ' | 数据: <span style="font-family:monospace;color:#666">' + esc(ext.data) + '</span></div>';
+          html += '</div>';
+        }
+        html += '</td></tr>';
+      }
+      html += '</table>';
+      html += '</div></div>';
+    }
+
+    // Certificates - 优先用 cert_chain 渲染
+    const chains = srv.cert_chain && srv.cert_chain.length > 0 ? srv.cert_chain : null;
+    if (certs.length > 0) {
+      html += '<div class="section-title">📜 数字证书</div>';
+      if (chains) {
+        // 按链渲染
+        for (let ci = 0; ci < chains.length; ci++) {
+          const chain = chains[ci].chain || [];
+          if (chain.length < 2 && chains.length === 1) {
+            // 单条链且只有一个证书，不显示链标题
+          } else {
+            html += '<div style="margin:8px 0 4px;font-size:13px;color:#1a5276;font-weight:600">🔗 证书链 ' + (ci + 1) + '</div>';
+          }
+          for (const entry of chain) {
+            html += renderCert(entry.cert, entry.is_server_cert, ci);
+          }
+        }
+      } else {
+        // 无链信息时直接平铺
+        for (const cert of certs) {
+          html += renderCert(cert);
+        }
+      }
+    }
+
+    // Actions
+    html += '<div class="actions">';
+    html += '<button class="btn btn-sm btn-success" onclick="exportPem(\'' + data.cache_id + '\', \'' + ip + '\')">导出 PEM</button>';
+    html += '</div>';
+
+    html += '</div></div>';
+  }
+
+  el.innerHTML = html;
+}
+
+function toggleServerHello(el) {
+  const detail = el.nextElementSibling;
+  const toggle = el.querySelector('.sh-toggle');
+  if (detail && detail.classList.contains('server-hello-detail')) {
+    const isHidden = detail.style.display === 'none';
+    detail.style.display = isHidden ? 'block' : 'none';
+    toggle.textContent = isHidden ? '▼ 收起' : '▶ 展开查看详情';
+  }
+}
+
+function renderCert(cert, isServerCert, chainIndex) {
+  if (!cert.subject && !cert.der) return '';
+
+  const isSelfSigned = cert.is_self_signed;
+  const validTo = cert.not_after ? new Date(cert.not_after).toLocaleDateString('zh-CN') : '未知';
+  const validFrom = cert.not_before ? new Date(cert.not_before).toLocaleDateString('zh-CN') : '未知';
+  const now = new Date();
+  const expired = cert.not_after ? new Date(cert.not_after) < now : false;
+
+  let html = '<div class="cert-card' + (isSelfSigned ? ' self-signed' : '') + '">';
+
+  // 服务器证书标注
+  if (isServerCert) {
+    html += '<div style="margin-bottom:8px">';
+    html += '<span style="display:inline-block;background:#1a5276;color:#fff;padding:2px 10px;border-radius:4px;font-size:12px;font-weight:600">🖥 本服务器证书</span>';
+    html += '</div>';
+  }
+
+  // Subject & Issuer
+  html += '<div class="field"><span class="key">主题 (Subject)</span>';
+  html += '<span class="val subject-name">' + esc(cert.subject || 'N/A') + '</span></div>';
+  html += '<div class="field"><span class="key">颁发者 (Issuer)</span>';
+  html += '<span class="val">' + esc(cert.issuer || 'N/A') + '</span></div>';
+  if (isSelfSigned) {
+    html += '<div class="field"><span class="key">自签名</span><span class="val" style="color:#e67e22">⚠ 是</span></div>';
+  }
+
+  // Serial & Algorithm
+  html += '<div class="field"><span class="key">序列号</span><span class="val" style="font-family:monospace;font-size:12px">' + esc(cert.serial || '') + '</span></div>';
+  html += '<div class="field"><span class="key">签名算法</span><span class="val">' + esc(cert.signature_algorithm || '') + '</span></div>';
+  html += '<div class="field"><span class="key">公钥</span><span class="val">' + esc(cert.public_key || '') + '</span></div>';
+
+  // Validity
+  html += '<div class="field"><span class="key">有效期</span>';
+  html += '<span class="val">' + validFrom + ' ~ <strong>' + validTo + '</strong>';
+  if (expired) html += ' <span style="color:#e74c3c;font-weight:600">[已过期]</span>';
+  else html += ' <span style="color:#27ae60">[有效]</span>';
+  html += '</span></div>';
+
+  // Version
+  html += '<div class="field"><span class="key">版本</span><span class="val">v' + cert.version + '</span></div>';
+
+  // SAN
+  if (cert.san && cert.san.length > 0) {
+    html += '<div class="field"><span class="key">主题备用名</span>';
+    html += '<span class="val"><div class="san-list">';
+    for (const san of cert.san) {
+      html += '<span class="san-tag">' + esc(san) + '</span>';
+    }
+    html += '</div></span></div>';
+  }
+
+  // Key Usage
+  if (cert.key_usage && cert.key_usage.length > 0) {
+    html += '<div class="field"><span class="key">密钥用法</span>';
+    html += '<span class="val"><div class="tag-list">';
+    for (const ku of cert.key_usage) {
+      const label = ku.replace(/_/g, ' ');
+      html += '<span class="ku-tag">' + label + '</span>';
+    }
+    html += '</div></span></div>';
+  }
+
+  // Extended Key Usage
+  if (cert.ext_key_usage && cert.ext_key_usage.length > 0) {
+    html += '<div class="field"><span class="key">扩展密钥用法</span>';
+    html += '<span class="val"><div class="tag-list">';
+    for (const eku of cert.ext_key_usage) {
+      const label = eku.replace(/^[0-9.]+/, '').replace(/_/g, ' ') || eku;
+      html += '<span class="eku-tag">' + esc(label) + '</span>';
+    }
+    html += '</div></span></div>';
+  }
+
+  // 密码类型（国密/国际）
+  if (cert.cipher_type) {
+    html += '<div class="field"><span class="key">密码类型</span>';
+    html += '<span class="val" style="color:#27ae60;font-weight:600">' + esc(cert.cipher_type) + '</span></div>';
+  }
+
+  // Parse error
+  if (cert.parse_error) {
+    html += '<div class="field"><span class="key">解析错误</span>';
+    html += '<span class="val" style="color:#e74c3c">' + esc(cert.parse_error) + '</span></div>';
+  }
+
+  html += '</div>';
+  return html;
+}
+
+function esc(s) {
+  if (!s) return '';
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
+
+async function exportPem(cacheId, serverIp) {
+  try {
+    const res = await fetch('/api/export/' + cacheId + '?ip=' + serverIp);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'certificates_' + serverIp + '.pem';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert('导出失败: ' + e.message);
+  }
+}
+</script>
+</body>
+</html>
