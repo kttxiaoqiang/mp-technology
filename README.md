@@ -92,6 +92,21 @@ kb-web/
 
 ### 二、安装
 
+#### 2.1 安装系统依赖（Ubuntu）
+
+```bash
+# Node.js v22（如未安装）
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo bash
+sudo apt-get install -y nodejs
+
+# 构建工具（better-sqlite3 编译用）
+# Python 3（MarkItDown 文档转换）
+# LibreOffice（docx/xlsx 回退转换，可选）
+sudo apt-get install -y build-essential python3 python3-pip libreoffice-core libreoffice-writer libreoffice-calc
+```
+
+#### 2.2 项目依赖
+
 ```bash
 # 1. 克隆
 git clone https://github.com/kttxiaoqiang/mp-technology.git
@@ -101,7 +116,7 @@ cd mp-technology
 npm install
 
 # 3. Python 依赖（文档转换）
-pip install markitdown
+python3 -m pip install markitdown
 ```
 
 ### 三、配置
