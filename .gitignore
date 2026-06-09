@@ -19,6 +19,7 @@ company_knowledge_base/
 
 # 测试报告
 kb_data/
+data/
 test-results/
 test/screenshot-*
 
@@ -27,3 +28,24 @@ public/lib/
 public/vendor/
 _images/
 .scratch/
+
+# 无关项目文件
+pcap_analyzer*
+gen_test_pcap*
+
+# 调试脚本
+dc*.mjs
+debug-page*
+login-screenshot*
+
+# 历史版本
+server_v*
+server_new*
+server_clean*
+server-broken*
+server_esm*
+server.log
+
+# 启动脚本（本地环境特定）
+*.sh
+!keepalive.sh
