@@ -4,16 +4,26 @@ __pycache__/
 .env
 *.log
 /tmp/
-test/screenshot-*.png
-test/*.png
-public/*.png
-public/*.bak*
-public/index.html.bak*
-public/index.html.backup*
-public/example-page.png
-public/kb-login-screenshot.png
-public/our-page.png
-public/our-v2.png
+
+# 知识库文件（不上传到 GitHub）
+company_knowledge_base/
+
+# 截图
+*.png
+*.jpg
+!public/*.ico
+
+# 备份文件
+*.bak
+*.bak*
+
+# 测试报告
+kb_data/
+test-results/
+test/screenshot-*
+
+# 遗留缓存
 public/lib/
 public/vendor/
 _images/
+.scratch/
