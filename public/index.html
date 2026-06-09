@@ -1553,7 +1553,7 @@ const App = {
       };
     });
 
-    const catParam = category === '全部' ? '' : category;
+    const catParam = category === '全部' ? '' : category === '其他' ? '根目录' : category;
     try {
       const r = await fetch('/api/files' + (catParam ? '?category=' + encodeURIComponent(catParam) : ''));
       const d = await r.json();

@@ -772,7 +772,7 @@ function searchMdFiles(query, maxResults = 20, category) {
 app.get('/api/files', (req, res) => {
   try {
     const files = scanFiles(KB_PATH);
-    const categoryFilter = (req.query.category || '').trim();
+    const categoryFilter = (req.query.category || '').trim().replace('其他', '根目录');
     const filtered = categoryFilter
       ? files.filter(f => (f.dir === categoryFilter || f.category === categoryFilter))
       : files;
