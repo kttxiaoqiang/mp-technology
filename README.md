@@ -66,6 +66,7 @@ kb-web/
 - **Python** 3.8+（用于 MarkItDown 文档转换）
 - **LibreOffice**（可选，docx/xlsx fallback 转换）
 - **DeepSeek API Key**（可选，AI 分类与 FAQ 提取需要）
+- **QMD 依赖**（向量检索）：g++ ≥ 9、CMake ≥ 3.16（国内需配置 `HF_ENDPOINT=https://hf-mirror.com` 镜像）
 
 ### 1. 克隆与安装
 
@@ -96,7 +97,24 @@ DEEPSEEK_API_KEY=sk-你的key
 
 > **注意**：如果不配置 `DEEPSEEK_API_KEY`，AI 分类和 FAQ 提取功能将不可用，其余功能正常。
 
-### 3. 初始化数据库
+### 3. 安装 QMD（向量检索，可选）
+
+```bash
+npm install -g @tobilu/qmd
+
+# 国内需使用镜像源下载模型
+HF_ENDPOINT=https://hf-mirror.com qmd pull embeddinggemma-300M-Q8_0
+HF_ENDPOINT=https://hf-mirror.com qmd pull Qwen3-Reranker-0.8b-q8_0
+HF_ENDPOINT=https://hf-mirror.com qmd pull query-expansion-1.7B-q4_k_m
+
+# 初始化知识库索引
+qmd embed /home/zhang/company_knowledge_base
+```
+
+> **注意**：不安装 QMD 不影响基本功能，只是搜索会退化为纯全文 grep（语义检索不可用）。
+> QMD 编译需要 g++ ≥ 9，g++ 9.4 需手动将 `binding.gyp` 中的 `-std=c++20` 改为 `-std=c++2a`。
+
+### 4. 初始化数据库
 
 首次启动会自动初始化数据库。也可以手动执行：
 
